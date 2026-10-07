@@ -1,0 +1,43 @@
+name: A08 纸面交易
+
+on:
+  schedule:
+    - cron: "7 * * * *"   # 每小时第 7 分钟（UTC）；GitHub 定时可能再延迟几分钟，程序会自动补扫漏掉的整点
+  workflow_dispatch: {}    # 允许在网页上手动点“Run workflow”
+
+permissions:
+  contents: write          # 需要把 state.json 等记录提交回仓库
+
+concurrency:
+  group: paper-trader
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 运行一次纸面交易（不下任何真实订单）
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python paper_trader.py --once
+
+      - name: 保存记录到仓库
+        if: always()
+        run: |
+          git config user.name "paper-bot"
+          git config user.email "paper-bot@users.noreply.github.com"
+          git add -A -- state.json log.txt '*.csv'
+          git diff --cached --quiet && exit 0
+          git commit -m "纸面交易 $(date -u +%Y-%m-%dT%H:%MZ)"
+          for i in 1 2 3; do git pull --rebase && git push && break; sleep 5; done
