@@ -1,0 +1,5 @@
+.cache/
+__pycache__/
+telegram.env
+stdout.log
+spot_cache/
